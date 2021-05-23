@@ -7,6 +7,7 @@
 //========================================================//
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <inttypes.h>
 #include "predictor.h"
 
@@ -40,26 +41,19 @@ int verbose;
 //TODO: Add your own Branch Predictor data structures here
 //
 
-// Gshare:13
-typedef struct GSharePredictor {
-  // History: last n branches
-  uint32_t bhr;
-  // State: What we did last time we saw this history
-  // Counters: 2-bit predictor
-  // Each cell is no longer just T/N, it is T/t/n/N
-  // XOR history with lower 13 bits of PC to index into `state`
-  // 2^n cells, 1 for each possible history, each 2* bits
-  // *actually 8 because 1 byte is the smallest size
-  uint8_t * state;
-} GShare_t;
+int bhr;         // keeps track of global history
 
-GShare_t gPredictor;
+// State: What we did last time we saw this history
+// Counters: 2-bit predictor
+// Each cell is no longer just T/N, it is T/t/n/N
+// XOR history with lower 13 bits of PC to index into `state`
+// 2^n cells, 1 for each possible history, each 2* bits
+// *actually 8 because 1 byte is the smallest size
 
-int* BHT_index;     // array to keep track of where addr goes to
-int* BHT_global;    // 2^n array to keep track of global t/nt
-int* BHT_local;     // 2^n array to keep track of local t/nt
-int* chooser;       // keeps track of chooser for each addr
-int G_hist;         // keeps track of global history
+uint32_t* BHT_index;     // array to keep track of where addr goes to
+uint32_t* BHT_global;    // 2^n array to keep track of global t/nt
+uint32_t* BHT_local;     // 2^n array to keep track of local t/nt
+uint32_t* chooser;       // keeps track of chooser for each addr
 
 //------------------------------------//
 //        Predictor Functions         //
@@ -76,39 +70,55 @@ init_predictor()
   
   // the 'ghistoryBits' will be used to size the global and choice predictors
   
-  int global_size = pow(2, ghistoryBits);
-  G_hist = 0; // index into table
-  BHT_global = (int*)malloc(sizeof(int) * global_size);
-  chooser = (int*)malloc(sizeof(int) * global_size);
+  uint32_t global_size = pow(2, ghistoryBits);
+  bhr = 0; // index into table
+
+  BHT_global = (uint32_t*)malloc(sizeof(uint32_t) * global_size);
+  chooser = (uint32_t*)malloc(sizeof(uint32_t) * global_size);
   
   // the 'lhistoryBits' and 'pcIndexBits' will be used to size the local predictor.
-  int local_size = pow(2, lhistoryBits);
-  int BHT_size = pow(2, pcIndexBits);
-  BHT_local = (int*)malloc(sizeof(int) * local_size);
-  BHT_index = (int*)malloc(sizeof(int) * BHT_size);
+  uint32_t local_size = pow(2, lhistoryBits);
+  uint32_t BHT_size = pow(2, pcIndexBits);
+  BHT_local = (uint32_t*)malloc(sizeof(uint32_t) * local_size);
+  BHT_index = (uint32_t*)malloc(sizeof(uint32_t) * BHT_size);
   
   // All 2-bit predictors should be initialized to WN (Weakly Not Taken).
-  for (int i = 0; i < global_size; i++){
+  for (uint32_t i = 0; i < global_size; i++){
     BHT_global[i] = WN;
   }
 
-  for (int i = 0; i < local_size; i++){
+  for (uint32_t i = 0; i < local_size; i++){
     BHT_local[i] = WN;
   }
 
-
   // all addresses' indexes to BHT set to be 0 initially
-  for (int i = 0; i < BHT_size; i++){
+  for (uint32_t i = 0; i < BHT_size; i++){
     BHT_index[i] = 0;
   }
 
   // The Choice Predictor used to select which predictor 
   // should be initialized to Weakly select the Global Predictor.
   // [0=SG, 1=WG, 2=WL, 3=SL], since 2-bit predictor
-  for (int i = 0; i < global_size; i++){
+  for (uint32_t i = 0; i < global_size; i++){
     chooser[i] = 1;
   }
   
+}
+
+// ---------------- BEGIN MAKE PREDICTION ----------------
+
+//Predict using GShare:n
+uint8_t make_prediction_gshare(uint32_t pc) {
+  // mod out index from pc to get lowest bits
+  uint32_t mod_amt = pow(2, lhistoryBits);
+  uint32_t gshare_index = (pc % mod_amt) ^ bhr;
+
+  uint32_t prediction = BHT_global[gshare_index];
+  if( prediction > WN) {
+    return TAKEN;
+  } else {
+    return NOTTAKEN;
+  }
 }
 
 uint8_t make_prediction_tournament(uint32_t pc){
@@ -118,17 +128,17 @@ uint8_t make_prediction_tournament(uint32_t pc){
   //return TAKEN;
   
   // mod out index from pc, for local prediction
-  int local_mem_track = pow(2, lhistoryBits);
+  uint32_t local_mem_track = pow(2, lhistoryBits);
   uint32_t local_index = pc % local_mem_track;
-  int BHT_idx = BHT_index[local_index];
-  int local_choice =  BHT_local[BHT_idx];
+  uint32_t BHT_idx = BHT_index[local_index];
+  uint32_t local_choice =  BHT_local[BHT_idx];
 
 
   // global choice
-  int global_choice = BHT_global[G_hist];
+  uint32_t global_choice = BHT_global[bhr];
 
-  int choose_idx = pc % (int)pow(2, ghistoryBits);
-  int choice = chooser[choose_idx];
+  uint32_t choose_idx = pc % (int)pow(2, ghistoryBits);
+  uint32_t choice = chooser[choose_idx];
 
   if (choice <= 1){
     // choice is SG or WG
@@ -148,12 +158,6 @@ uint8_t make_prediction_tournament(uint32_t pc){
     }
   }
   
-}
-
-//Predict using GShare:13
-//BHR size = 13
-uint8_t make_prediction_gshare(uint32_t pc) {
-  return NOTTAKEN;
 }
 
 // Make a prediction for conditional branch instruction at PC 'pc'
@@ -186,7 +190,30 @@ make_prediction(uint32_t pc)
   return NOTTAKEN;
 }
 
+// ----------------- END MAKE PREDICTION -----------------
 
+// ---------------- BEGIN TRAIN PREDICTOR ----------------
+
+void train_predictor_gshare(uint32_t pc, uint8_t outcome) {
+  // obtain old location
+  // mod out index from pc to get lowest bits
+  uint32_t mod_amt = pow(2, lhistoryBits);
+  uint32_t gshare_index = (pc % mod_amt) ^ bhr;
+
+  if(outcome) { // was taken
+    if(BHT_global[gshare_index] != ST) {
+      BHT_global[gshare_index]++;
+    }
+  } else { //not taken 
+    if(BHT_global[gshare_index] != SN) {
+      BHT_global[gshare_index]--;
+    }
+  }
+}
+
+void train_predictor_tournament(uint32_t pc, uint32_t outcome) {
+
+}
 
 // Train the predictor the last executed branch at PC 'pc' and with
 // outcome 'outcome' (true indicates that the branch was taken, false
@@ -198,4 +225,21 @@ train_predictor(uint32_t pc, uint8_t outcome)
   //
   //TODO: Implement Predictor training
   //
+
+  // Update based on the bpType
+  switch (bpType) {
+    case GSHARE:
+      train_predictor_gshare(pc, outcome);
+    case TOURNAMENT:
+      train_predictor_tournament(pc, outcome);
+    case CUSTOM:
+    case STATIC:
+    default:
+      break;
+  }
+  
+  // update bhr
+  bhr = (bhr << 1) | outcome;
 }
+
+// ----------------- END TRAIN PREDICTOR -----------------
