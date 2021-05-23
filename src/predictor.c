@@ -59,6 +59,7 @@ init_predictor()
   //
   
   // the 'ghistoryBits' will be used to size the global and choice predictors
+  
   int global_size = pow(2, ghistoryBits);
   G_hist = 0; // index into table
   BHT_global = (int*)malloc(sizeof(int) * global_size);
@@ -95,9 +96,10 @@ init_predictor()
 }
 
 uint8_t make_prediction_tournament(uint32_t pc){
+  
   printf("%" PRIu32 "\n", pc);
   printf("in tournament");
-  return TAKEN;
+  //return TAKEN;
   
   // mod out index from pc, for local prediction
   int local_mem_track = pow(2, lhistoryBits);
@@ -129,6 +131,7 @@ uint8_t make_prediction_tournament(uint32_t pc){
       return TAKEN;
     }
   }
+  
 }
 
 // Make a prediction for conditional branch instruction at PC 'pc'
