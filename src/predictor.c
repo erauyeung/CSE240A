@@ -37,6 +37,20 @@ int verbose;
 //TODO: Add your own Branch Predictor data structures here
 //
 
+// Gshare:13
+typedef struct GSharePredictor {
+  // History: last n branches
+  uint32_t bhr;
+  // State: What we did last time we saw this history
+  // Counters: 2-bit predictor
+  // Each cell is no longer just T/N, it is T/t/n/N
+  // XOR history with lower 13 bits of PC to index into `state`
+  // 2^n cells, 1 for each possible history, each 2* bits
+  // *actually 8 because 1 byte is the smallest size
+  uint8_t * state;
+} GShare_t;
+
+GShare_t gPredictor;
 
 //------------------------------------//
 //        Predictor Functions         //
@@ -50,6 +64,12 @@ init_predictor()
   //
   //TODO: Initialize Branch Predictor Data Structures
   //
+}
+
+//Predict using GShare:13
+//BHR size = 13
+uint8_t make_prediction_gshare(uint32_t pc) {
+  return NOTTAKEN;
 }
 
 // Make a prediction for conditional branch instruction at PC 'pc'
@@ -68,6 +88,7 @@ make_prediction(uint32_t pc)
     case STATIC:
       return TAKEN;
     case GSHARE:
+      return make_prediction_gshare(pc);
     case TOURNAMENT:
     case CUSTOM:
     default:
