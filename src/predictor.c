@@ -135,8 +135,8 @@ uint8_t make_prediction_tournament(uint32_t pc){
   //return TAKEN;
   
   // mod out index from pc, for local prediction
-  uint32_t local_mem_track = pow(2, lhistoryBits);
-  uint32_t local_index = pc % local_mem_track;
+  uint32_t local_size = (int)pow(2, lhistoryBits);
+  uint32_t local_index = (pc % local_size) ^ bhr;
   uint32_t BHT_idx = BHT_index[local_index];
   uint32_t local_choice =  BHT_local[BHT_idx];
 
@@ -216,7 +216,54 @@ void train_predictor_gshare(uint32_t pc, uint8_t outcome) {
 }
 
 void train_predictor_tournament(uint32_t pc, uint32_t outcome) {
+  // find local choice
+  uint32_t local_size = (int)pow(2, lhistoryBits);
+  uint32_t local_index = (pc % local_size) ^ bhr;
+  uint32_t BHT_idx = BHT_index[local_index];
+  uint32_t local_choice =  BHT_local[BHT_idx];
 
+  // find global choice
+  uint32_t global_choice = BHT_global[bhr];
+
+  uint8_t global_correct = 0;
+  uint8_t local_correct = 0;
+  if ((outcome && ((global_choice == WT) || (global_choice == ST))) || 
+      (!outcome && ((global_choice == WN) || (global_choice == SN)))){
+    // global choice was correct
+    global_correct = 1;
+  }
+
+  if ((outcome && ((local_choice == WT) || (local_choice == ST))) || 
+      (!outcome && ((local_choice == WN) || (local_choice == SN)))){
+    // local choice was correct
+    local_correct = 1;
+  }
+
+  // update local prediction
+  // right side of diagram
+  if(outcome) { // was taken
+    if(BHT_local[BHT_idx] != ST) {
+      BHT_local[BHT_idx]++;
+    }
+  } else { //not taken 
+    if(BHT_local[BHT_idx] != SN) {
+      BHT_local[BHT_idx]--;
+    }
+  }
+
+  // update local history
+  // shift bits over left and add result to LSB
+  // left side of diagram
+  BHT_index[local_index] = (BHT_index[local_index] << 1 + outcome) % local_size;
+
+  // update chooser/counter, based on whether global or local was right/wrong
+  int counter_change = global_correct - local_choice;
+  if (((counter_change == 1) && (chooser[bhr] != 3)) ||  
+      ((counter_change == -1) && (chooser[bhr] != 0))){
+    chooser[bhr] += counter_change;
+  } 
+
+  // bhr updated at end of train_predictor
 }
 
 // Train the predictor the last executed branch at PC 'pc' and with
