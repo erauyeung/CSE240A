@@ -55,9 +55,16 @@ uint32_t* BHT_global;    // 2^n array to keep track of global t/nt
 uint32_t* BHT_local;     // 2^n array to keep track of local t/nt
 uint32_t* chooser;       // keeps track of chooser for each addr
 
+//uint32_t global_size = 0;
+
 //------------------------------------//
 //        Predictor Functions         //
 //------------------------------------//
+
+uint32_t gshareIndex(uint32_t pc) {
+  // mod out index from pc to get lowest bits
+  return (pc ^ bhr) % (uint32_t)pow(2, ghistoryBits);
+}
 
 // Initialize the predictor
 //
@@ -110,10 +117,10 @@ init_predictor()
 //Predict using GShare:n
 uint8_t make_prediction_gshare(uint32_t pc) {
   // mod out index from pc to get lowest bits
-  uint32_t mod_amt = pow(2, lhistoryBits);
-  uint32_t gshare_index = (pc % mod_amt) ^ bhr;
+  //uint32_t mod_amt = pow(2, ghistoryBits);
+  //uint32_t gshare_index = (pc % mod_amt) ^ bhr;
 
-  uint32_t prediction = BHT_global[gshare_index];
+  uint32_t prediction = BHT_global[gshareIndex(pc)];
   if( prediction > WN) {
     return TAKEN;
   } else {
@@ -196,17 +203,14 @@ make_prediction(uint32_t pc)
 
 void train_predictor_gshare(uint32_t pc, uint8_t outcome) {
   // obtain old location
-  // mod out index from pc to get lowest bits
-  uint32_t mod_amt = pow(2, lhistoryBits);
-  uint32_t gshare_index = (pc % mod_amt) ^ bhr;
-
+  uint32_t old_location = gshareIndex(pc);
   if(outcome) { // was taken
-    if(BHT_global[gshare_index] != ST) {
-      BHT_global[gshare_index]++;
+    if(BHT_global[old_location] != ST) {
+      BHT_global[old_location]++;
     }
   } else { //not taken 
-    if(BHT_global[gshare_index] != SN) {
-      BHT_global[gshare_index]--;
+    if(BHT_global[old_location] != SN) {
+      BHT_global[old_location]--;
     }
   }
 }
@@ -239,7 +243,7 @@ train_predictor(uint32_t pc, uint8_t outcome)
   }
   
   // update bhr
-  bhr = (bhr << 1) | outcome;
+  bhr = ((bhr << 1) | outcome) % (uint32_t)pow(2, ghistoryBits);
 }
 
 // ----------------- END TRAIN PREDICTOR -----------------
