@@ -128,18 +128,12 @@ uint8_t make_prediction_gshare(uint32_t pc) {
   }
 }
 
-uint8_t make_prediction_tournament(uint32_t pc){
-  
-  printf("%" PRIu32 "\n", pc);
-  printf("in tournament");
-  //return TAKEN;
-  
+uint8_t make_prediction_tournament(uint32_t pc){  
   // mod out index from pc, for local prediction
   uint32_t local_size = (int)pow(2, lhistoryBits);
   uint32_t local_index = (pc % local_size) ^ bhr;
   uint32_t BHT_idx = BHT_index[local_index];
   uint32_t local_choice =  BHT_local[BHT_idx];
-
 
   // global choice
   uint32_t global_choice = BHT_global[bhr];
@@ -218,7 +212,7 @@ void train_predictor_gshare(uint32_t pc, uint8_t outcome) {
 void train_predictor_tournament(uint32_t pc, uint32_t outcome) {
   // find local choice
   uint32_t local_size = (int)pow(2, lhistoryBits);
-  uint32_t local_index = (pc % local_size) ^ bhr;
+  uint32_t local_index = (pc ^ bhr) % local_size;
   uint32_t BHT_idx = BHT_index[local_index];
   uint32_t local_choice =  BHT_local[BHT_idx];
 
