@@ -131,14 +131,14 @@ uint8_t make_prediction_gshare(uint32_t pc) {
 uint8_t make_prediction_tournament(uint32_t pc){  
   // mod out index from pc, for local prediction
   uint32_t local_size = (int)pow(2, lhistoryBits);
-  uint32_t local_index = (pc % local_size) ^ bhr;
+  uint32_t local_index = pc % local_size;
   uint32_t BHT_idx = BHT_index[local_index];
   uint32_t local_choice =  BHT_local[BHT_idx];
 
   // global choice
   uint32_t global_choice = BHT_global[bhr];
 
-  uint32_t choose_idx = pc % (int)pow(2, ghistoryBits);
+  uint32_t choose_idx = bhr;
   uint32_t choice = chooser[choose_idx];
 
   if (choice <= 1){
@@ -179,7 +179,6 @@ make_prediction(uint32_t pc)
     case GSHARE:
       return make_prediction_gshare(pc);
     case TOURNAMENT:
-      //printf("%" PRIu32 "\n", pc);
       return make_prediction_tournament(pc);
       break;
     case CUSTOM:
@@ -212,27 +211,33 @@ void train_predictor_gshare(uint32_t pc, uint8_t outcome) {
 void train_predictor_tournament(uint32_t pc, uint32_t outcome) {
   // find local choice
   uint32_t local_size = (int)pow(2, lhistoryBits);
-  uint32_t local_index = (pc ^ bhr) % local_size;
+  uint32_t local_index = pc  % local_size; 
   uint32_t BHT_idx = BHT_index[local_index];
   uint32_t local_choice =  BHT_local[BHT_idx];
 
   // find global choice
   uint32_t global_choice = BHT_global[bhr];
 
+  // determine if global and local choices were correct
   uint8_t global_correct = 0;
   uint8_t local_correct = 0;
-  if ((outcome && ((global_choice == WT) || (global_choice == ST))) || 
+
+  if (( outcome && ((global_choice == WT) || (global_choice == ST))) || 
       (!outcome && ((global_choice == WN) || (global_choice == SN)))){
     // global choice was correct
     global_correct = 1;
   }
 
-  if ((outcome && ((local_choice == WT) || (local_choice == ST))) || 
+  if (( outcome && ((local_choice == WT) || (local_choice == ST))) || 
       (!outcome && ((local_choice == WN) || (local_choice == SN)))){
     // local choice was correct
     local_correct = 1;
   }
 
+  //DEBUG
+  //printf("out %d loc %d glo %d\n", outcome, local_correct, global_correct);
+  //printf("loc choice %d glob choice %d\n", local_choice, global_choice);
+  
   // update local prediction
   // right side of diagram
   if(outcome) { // was taken
@@ -248,13 +253,28 @@ void train_predictor_tournament(uint32_t pc, uint32_t outcome) {
   // update local history
   // shift bits over left and add result to LSB
   // left side of diagram
-  BHT_index[local_index] = (BHT_index[local_index] << 1 + outcome) % local_size;
+  BHT_index[local_index] = ((BHT_index[local_index] << 1) + outcome) % local_size;
+
+
+  // update global prediction
+  if(outcome) { // was taken
+    if(BHT_global[bhr] != ST) {
+      BHT_global[bhr]++;
+    }
+  } else { //not taken 
+    if(BHT_global[bhr] != SN) {
+      BHT_global[bhr]--;
+    }
+  }
+
 
   // update chooser/counter, based on whether global or local was right/wrong
-  int counter_change = global_correct - local_choice;
-  if (((counter_change == 1) && (chooser[bhr] != 3)) ||  
-      ((counter_change == -1) && (chooser[bhr] != 0))){
-    chooser[bhr] += counter_change;
+  // as per slide in lec 8
+  uint32_t choose_idx = bhr;
+  int counter_change = local_choice - global_correct;
+  if ((0 <= chooser[choose_idx] + counter_change) && 
+      (chooser[choose_idx] + counter_change <= 3)){
+    chooser[choose_idx] += counter_change;
   } 
 
   // bhr updated at end of train_predictor
