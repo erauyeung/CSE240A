@@ -33,6 +33,8 @@ int pcIndexBits;  // Number of bits used for PC index
 int bpType;       // Branch Prediction Type
 int verbose;
 
+#define PERCEPTRON_THRESHOLD 10
+
 //------------------------------------//
 //      Predictor Data Structures     //
 //------------------------------------//
@@ -55,7 +57,8 @@ uint32_t* BHT_global;    // 2^n array to keep track of global t/nt
 uint32_t* BHT_local;     // 2^n array to keep track of local t/nt
 uint32_t* chooser;       // keeps track of chooser for each addr
 
-//uint32_t global_size = 0;
+// Stuff for perceptron
+int ** perceptron_f;     // Each F_i is 32-bit int, index by [pc][history]
 
 //------------------------------------//
 //        Predictor Functions         //
@@ -70,11 +73,7 @@ uint32_t gshareIndex(uint32_t pc) {
 //
 void
 init_predictor()
-{ 
-  //
-  //TODO: Initialize Branch Predictor Data Structures
-  //
-  
+{   
   // the 'ghistoryBits' will be used to size the global and choice predictors
   
   uint32_t global_size = pow(2, ghistoryBits);
@@ -88,6 +87,12 @@ init_predictor()
   uint32_t BHT_size = pow(2, pcIndexBits);
   BHT_local = (uint32_t*)malloc(sizeof(uint32_t) * local_size);
   BHT_index = (uint32_t*)malloc(sizeof(uint32_t) * BHT_size);
+
+
+  // size = |F| * |BHR| * #PC
+  // all start at 0
+  //perceptron_f = (int **)malloc(sizeof(int) * ghistoryBits * global_size);
+  perceptron_f = (int **)calloc(ghistoryBits * global_size, sizeof(int));
   
   // All 2-bit predictors should be initialized to WN (Weakly Not Taken).
   for (uint32_t i = 0; i < global_size; i++){
@@ -128,7 +133,7 @@ uint8_t make_prediction_gshare(uint32_t pc) {
   }
 }
 
-uint8_t make_prediction_tournament(uint32_t pc){  
+uint8_t make_prediction_tournament(uint32_t pc) {  
   // mod out index from pc, for local prediction
   uint32_t local_size = (int)pow(2, lhistoryBits);
   uint32_t local_index = pc % local_size;
@@ -158,7 +163,31 @@ uint8_t make_prediction_tournament(uint32_t pc){
       return TAKEN;
     }
   }
-  
+}
+
+// Perceptron checks if \Sigma (BHR_i * F_i) > threshold
+uint8_t make_prediction_custom(uint32_t pc) {
+  // Get the list of Fs for this PC
+  int * current_f = perceptron_f[pc];
+  // Manipulate bhr to get bhr[i]
+  int bhr_i = bhr;
+  // Summation
+  int sigma = 0;
+
+  int i = 0;
+  //bhr[ghistoryBits:0]
+  for(; i < ghistoryBits; i++) {
+    // F_i * bhr[i], where bhr[i] can only be 0 or 1
+    sigma += current_f[i]  * (bhr_i & 1);
+    // Shift right to move to next bhr[i]
+    bhr_i = bhr_i >> 1;
+  }
+
+  if( sigma > PERCEPTRON_THRESHOLD ) {
+    return TAKEN;
+  } else {
+    return NOTTAKEN;
+  }
 }
 
 // Make a prediction for conditional branch instruction at PC 'pc'
@@ -180,7 +209,6 @@ make_prediction(uint32_t pc)
       return make_prediction_gshare(pc);
     case TOURNAMENT:
       return make_prediction_tournament(pc);
-      break;
     case CUSTOM:
     default:
       break;
@@ -280,13 +308,15 @@ void train_predictor_tournament(uint32_t pc, uint32_t outcome) {
   // bhr updated at end of train_predictor
 }
 
+void train_predictor_custom(uint32_t pc, uint8_t outcome) {
+
+}
+
 // Train the predictor the last executed branch at PC 'pc' and with
 // outcome 'outcome' (true indicates that the branch was taken, false
 // indicates that the branch was not taken)
 //
-void
-train_predictor(uint32_t pc, uint8_t outcome)
-{
+void train_predictor(uint32_t pc, uint8_t outcome) {
   //
   //TODO: Implement Predictor training
   //
