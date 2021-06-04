@@ -93,6 +93,7 @@ init_predictor()
   // all start at 0
   //perceptron_f = (int **)malloc(sizeof(int) * ghistoryBits * global_size);
   perceptron_f = (int **)calloc(ghistoryBits * global_size, sizeof(int));
+  //perceptron_f = (int **)calloc(pow(2, pcIndexBits) * ghistoryBits * 1, sizeof(int*));
   
   // All 2-bit predictors should be initialized to WN (Weakly Not Taken).
   for (uint32_t i = 0; i < global_size; i++){
@@ -210,6 +211,7 @@ make_prediction(uint32_t pc)
     case TOURNAMENT:
       return make_prediction_tournament(pc);
     case CUSTOM:
+      return make_prediction_custom(pc);
     default:
       break;
   }
@@ -309,7 +311,25 @@ void train_predictor_tournament(uint32_t pc, uint32_t outcome) {
 }
 
 void train_predictor_custom(uint32_t pc, uint8_t outcome) {
+  /*
+  // Get the list of Fs for this PC
+  int * current_f = perceptron_f[pc];
 
+  // Update Fi when branch is taken
+  int bhr_i = bhr;
+
+  for(int i = 0; i < ghistoryBits; i++) {
+    // BHR_i == 1 ? F_i++ : F_i––;
+    if ((bhr_i & 1) == 1){
+      current_f[i] += 1;
+    } else {
+      current_f[i] -= 1;
+    }
+
+    // Shift right to move to next bhr[i]
+    bhr_i = bhr_i >> 1;
+  }
+  */
 }
 
 // Train the predictor the last executed branch at PC 'pc' and with
@@ -328,6 +348,7 @@ void train_predictor(uint32_t pc, uint8_t outcome) {
     case TOURNAMENT:
       train_predictor_tournament(pc, outcome);
     case CUSTOM:
+      train_predictor_custom(pc, outcome);
     case STATIC:
     default:
       break;
