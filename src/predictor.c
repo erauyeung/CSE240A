@@ -33,10 +33,10 @@ int pcIndexBits;  // Number of bits used for PC index
 int bpType;       // Branch Prediction Type
 int verbose;
 
-int perceptron_pc_width = 9;
+int perceptron_pc_width = 10;//9;
 
-#define PERCEPTRON_PC_BITS 9 //How many bits to use from PC
-#define PERCEPTRON_THRESHOLD 0//(1.93*15) + 14 // Threshold to predict taken
+#define PERCEPTRON_PC_BITS 10 //9 //How many bits to use from PC
+#define PERCEPTRON_THRESHOLD 0 //(1.93*15) + 14 // Threshold to predict taken
 
 //------------------------------------//
 //      Predictor Data Structures     //
@@ -61,7 +61,7 @@ uint32_t* BHT_local;     // 2^n array to keep track of local t/nt
 uint32_t* chooser;       // keeps track of chooser for each addr
 
 // Stuff for perceptron
-char * perceptron_f;    // Each F_i is 8-bit char
+char* perceptron_f;    // Each F_i is 8-bit char
 
 //------------------------------------//
 //        Predictor Functions         //
@@ -323,8 +323,27 @@ void train_predictor_custom(uint32_t pc, uint8_t outcome) {
   // Manipulate bhr to get bhr[i]
   int bhr_i = bhr;
 
+  
+
+  int sigma = current_f[ghistoryBits]; // start with current bias
   int i = 0;
-  //bhr[ghistoryBits:0]
+  
+  for(; i < ghistoryBits; i++) {
+    // F_i * bhr[i], where bhr[i] can only be 0 or 1
+    sigma += (int)(current_f[i]  * (bhr_i & 1));
+    // Shift right to move to next bhr[i]
+    bhr_i = bhr_i >> 1;
+  }
+
+  // update bias based 
+  if ((sigma < 0) && outcome){
+    current_f[ghistoryBits]++;
+  } else if ((sigma > 0) && (outcome == 0)){
+    current_f[ghistoryBits]--;
+  }
+
+  i = 0;
+  bhr_i = bhr;
   for(; i < ghistoryBits; i++) {
     // BHR_i == 1 ? F_i++ : F_i––;
     if ((bhr_i & 1) == 1){
@@ -332,16 +351,10 @@ void train_predictor_custom(uint32_t pc, uint8_t outcome) {
     } else {
       current_f[i]--;
     }
+
   
     // Shift right to move to next bhr[i]
     bhr_i = bhr_i >> 1;
-  }
-
-  // update bias based 
-  if (outcome){
-    current_f[ghistoryBits]++;
-  } else {
-    current_f[ghistoryBits]--;
   }
 }
 
