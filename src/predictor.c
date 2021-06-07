@@ -94,7 +94,7 @@ init_predictor()
 
   // size = |F| * |BHR| * #PC
   // all F_i start at 0
-  perceptron_f = (char *)calloc(ghistoryBits * pow(2,perceptron_pc_width), sizeof(char));
+  perceptron_f = (char *)calloc((ghistoryBits + 1) * pow(2,perceptron_pc_width), sizeof(char));
   
   // All 2-bit predictors should be initialized to WN (Weakly Not Taken).
   for (uint32_t i = 0; i < global_size; i++){
@@ -176,11 +176,11 @@ uint8_t make_prediction_custom(uint32_t pc) {
   // Manipulate bhr to get bhr[i]
   int bhr_i = bhr;
   // Summation
-  int sigma = 0;
+  int sigma = current_f[0]; // start with current bias
 
-  int i = 0;
+  int i = 1;
   //bhr[ghistoryBits:0]
-  for(; i < ghistoryBits; i++) {
+  for(; i < ghistoryBits+1; i++) {
     // F_i * bhr[i], where bhr[i] can only be 0 or 1
     sigma += (int)(current_f[i]  * (bhr_i & 1));
     // Shift right to move to next bhr[i]
@@ -319,13 +319,13 @@ void train_predictor_custom(uint32_t pc, uint8_t outcome) {
   // Get truncated pc
   int ind_pc = pc % (int)pow(2, perceptron_pc_width);
   // Get location of start of this row of F_i's
-  char * current_f = perceptron_f + ind_pc;
+  char * current_f = perceptron_f + (ind_pc * ghistoryBits);
   // Manipulate bhr to get bhr[i]
   int bhr_i = bhr;
 
-  int i = 0;
+  int i = 1;
   //bhr[ghistoryBits:0]
-  for(; i < ghistoryBits; i++) {
+  for(; i < ghistoryBits+1; i++) {
     // BHR_i == 1 ? F_i++ : F_i––;
     if ((bhr_i & 1) == 1){
       current_f[i] += 1;
