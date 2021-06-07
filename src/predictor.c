@@ -27,7 +27,7 @@ const char *email       = "EMAIL";
 const char *bpName[4] = { "Static", "Gshare",
                           "Tournament", "Custom" };
 
-int ghistoryBits = 16; // Number of bits used for Global History, default: 32, for perceptron
+int ghistoryBits = 15; // Number of bits used for Global History, default: 32, for perceptron
 int lhistoryBits; // Number of bits used for Local History
 int pcIndexBits;  // Number of bits used for PC index
 int bpType;       // Branch Prediction Type
@@ -36,7 +36,7 @@ int verbose;
 int perceptron_pc_width = 9;
 
 #define PERCEPTRON_PC_BITS 9 //How many bits to use from PC
-#define PERCEPTRON_THRESHOLD 0 // Threshold to predict taken
+#define PERCEPTRON_THRESHOLD 0//(1.93*15) + 14 // Threshold to predict taken
 
 //------------------------------------//
 //      Predictor Data Structures     //
@@ -170,17 +170,17 @@ uint8_t make_prediction_tournament(uint32_t pc) {
 // Perceptron checks if \Sigma (BHR_i * F_i) > threshold
 uint8_t make_prediction_custom(uint32_t pc) {
   // Get truncated pc
-  int ind_pc = pc % (int)pow(2, perceptron_pc_width);
+  int ind_pc = (pc ^ bhr) % (int)pow(2, perceptron_pc_width);
   // Get location of start of this row
-  char * current_f = perceptron_f + ind_pc;
+  char * current_f = perceptron_f + (ind_pc * (ghistoryBits + 1));
   // Manipulate bhr to get bhr[i]
   int bhr_i = bhr;
   // Summation
-  int sigma = current_f[0]; // start with current bias
+  int sigma = current_f[ghistoryBits]; // start with current bias
 
-  int i = 1;
+  int i = 0;
   //bhr[ghistoryBits:0]
-  for(; i < ghistoryBits+1; i++) {
+  for(; i < ghistoryBits; i++) {
     // F_i * bhr[i], where bhr[i] can only be 0 or 1
     sigma += (int)(current_f[i]  * (bhr_i & 1));
     // Shift right to move to next bhr[i]
@@ -317,24 +317,31 @@ void train_predictor_tournament(uint32_t pc, uint32_t outcome) {
 
 void train_predictor_custom(uint32_t pc, uint8_t outcome) {
   // Get truncated pc
-  int ind_pc = pc % (int)pow(2, perceptron_pc_width);
+  int ind_pc = (pc ^ bhr) % (int)pow(2, perceptron_pc_width);
   // Get location of start of this row of F_i's
-  char * current_f = perceptron_f + (ind_pc * ghistoryBits);
+  char * current_f = perceptron_f + (ind_pc * (ghistoryBits+1));
   // Manipulate bhr to get bhr[i]
   int bhr_i = bhr;
 
-  int i = 1;
+  int i = 0;
   //bhr[ghistoryBits:0]
-  for(; i < ghistoryBits+1; i++) {
+  for(; i < ghistoryBits; i++) {
     // BHR_i == 1 ? F_i++ : F_i––;
     if ((bhr_i & 1) == 1){
-      current_f[i] += 1;
+      current_f[i]++;
     } else {
-      current_f[i] -= 1;
+      current_f[i]--;
     }
-
+  
     // Shift right to move to next bhr[i]
     bhr_i = bhr_i >> 1;
+  }
+
+  // update bias based 
+  if (outcome){
+    current_f[ghistoryBits]++;
+  } else {
+    current_f[ghistoryBits]--;
   }
 }
 
@@ -366,7 +373,7 @@ void train_predictor(uint32_t pc, uint8_t outcome) {
     bhr = ((bhr << 1) | outcome) % (uint32_t)pow(2, ghistoryBits);
   }
   else {
-    bhr = ((bhr << 1) | outcome);
+    bhr = ((bhr << 1) | outcome) % (uint32_t)pow(2, ghistoryBits);
   }
 }
 
