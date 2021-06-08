@@ -172,19 +172,25 @@ uint8_t make_prediction_custom(uint32_t pc) {
   // Get truncated pc
   int ind_pc = (pc ^ bhr) % (int)pow(2, perceptron_pc_width);
   // Get location of start of this row
-  char * current_f = perceptron_f + (ind_pc * (ghistoryBits + 1));
+  char* current_f = perceptron_f + (ind_pc * (ghistoryBits + 1));
   // Manipulate bhr to get bhr[i]
   int bhr_i = bhr;
   // Summation
   int sigma = current_f[ghistoryBits]; // start with current bias
-
+  
   int i = 0;
-  //bhr[ghistoryBits:0]
+  uint64_t magnitude = pow(2, ghistoryBits);
+  //printf("begin\n");
   for(; i < ghistoryBits; i++) {
     // F_i * bhr[i], where bhr[i] can only be 0 or 1
-    sigma += (int)(current_f[i]  * (bhr_i & 1));
+    sigma += (int)(current_f[i]  * (int)(bhr_i / magnitude));
     // Shift right to move to next bhr[i]
-    bhr_i = bhr_i >> 1;
+    // printf("mag %ld\n",magnitude);
+    // printf("bhr %d\n", bhr_i);
+    // printf("dig %d\n", (int)(bhr_i / magnitude));
+    bhr_i = bhr_i % magnitude;
+    magnitude >> 1;
+    
   }
 
   //printf("%d\t", sigma);
@@ -318,43 +324,39 @@ void train_predictor_tournament(uint32_t pc, uint32_t outcome) {
 void train_predictor_custom(uint32_t pc, uint8_t outcome) {
   // Get truncated pc
   int ind_pc = (pc ^ bhr) % (int)pow(2, perceptron_pc_width);
-  // Get location of start of this row of F_i's
-  char * current_f = perceptron_f + (ind_pc * (ghistoryBits+1));
-  // Manipulate bhr to get bhr[i]
-  int bhr_i = bhr;
+  // Get location of start of this row
+  char * current_f = perceptron_f + (ind_pc * (ghistoryBits + 1));
 
+  // update bias term
+  uint8_t prediction = make_prediction_custom(pc);
   
-
-  int sigma = current_f[ghistoryBits]; // start with current bias
-  int i = 0;
-  
-  for(; i < ghistoryBits; i++) {
-    // F_i * bhr[i], where bhr[i] can only be 0 or 1
-    sigma += (int)(current_f[i]  * (bhr_i & 1));
-    // Shift right to move to next bhr[i]
-    bhr_i = bhr_i >> 1;
-  }
-
   // update bias based 
-  if ((sigma < 0) && outcome){
+  if (!prediction && outcome){
+    // guessed too low, increment bias
     current_f[ghistoryBits]++;
-  } else if ((sigma > 0) && (outcome == 0)){
+  } else if (prediction && !outcome){
+    // guessed to high, decrement bias
     current_f[ghistoryBits]--;
   }
 
-  i = 0;
-  bhr_i = bhr;
+  // update individual weights
+  int i = 0;
+  uint64_t magnitude = pow(2, ghistoryBits);
+  int bhr_i = bhr;
+
   for(; i < ghistoryBits; i++) {
     // BHR_i == 1 ? F_i++ : F_i––;
-    if ((bhr_i & 1) == 1){
+    if ((int)(bhr_i / magnitude) == 1){
       current_f[i]++;
     } else {
       current_f[i]--;
     }
-
-  
+    //printf("mag %ld\n", magnitude);
+    bhr_i = bhr_i % magnitude;
+    magnitude >> 1;
+    
     // Shift right to move to next bhr[i]
-    bhr_i = bhr_i >> 1;
+    //bhr_i = bhr_i >> 1;
   }
 }
 
