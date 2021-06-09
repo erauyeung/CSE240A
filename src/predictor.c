@@ -33,10 +33,10 @@ int pcIndexBits;  // Number of bits used for PC index
 int bpType;       // Branch Prediction Type
 int verbose;
 
-int perceptron_pc_width = 10;//9;
+int perceptron_pc_width = 10;//\\9;
 
-#define PERCEPTRON_PC_BITS 10 //9 //How many bits to use from PC
-#define PERCEPTRON_THRESHOLD 0 //(1.93*15) + 14 // Threshold to predict taken
+#define PERCEPTRON_PC_BITS 10;//9; //How many bits to use from PC
+#define PERCEPTRON_THRESHOLD 42 //-43 //(1.93*15) + 14 // Threshold to predict taken
 
 //------------------------------------//
 //      Predictor Data Structures     //
@@ -112,9 +112,9 @@ init_predictor()
 
   // The Choice Predictor used to select which predictor 
   // should be initialized to Weakly select the Global Predictor.
-  // [0=SG, 1=WG, 2=WL, 3=SL], since 2-bit predictor
+  // [0=SL, 1=WL, 2=WG, 3=SG], since 2-bit predictor
   for (uint32_t i = 0; i < global_size; i++){
-    chooser[i] = 1;
+    chooser[i] = 2;
   }
   
 }
@@ -148,7 +148,7 @@ uint8_t make_prediction_tournament(uint32_t pc) {
   uint32_t choose_idx = bhr;
   uint32_t choice = chooser[choose_idx];
 
-  if (choice <= 1){
+  if (choice >= 2){
     // choice is SG or WG
     if (global_choice == SN || global_choice == WN){
       // predict not taken, as BHT predicts NT
@@ -177,19 +177,17 @@ uint8_t make_prediction_custom(uint32_t pc) {
   int bhr_i = bhr;
   // Summation
   int sigma = current_f[ghistoryBits]; // start with current bias
-  
-  int i = 0;
-  uint64_t magnitude = pow(2, ghistoryBits);
-  //printf("begin\n");
-  for(; i < ghistoryBits; i++) {
+
+  // printf("begin\n  ");
+  for(int i = 0; i < ghistoryBits; i++) {
     // F_i * bhr[i], where bhr[i] can only be 0 or 1
-    sigma += (int)(current_f[i]  * (int)(bhr_i / magnitude));
+
+    sigma += current_f[i] * (bhr_i & 1);
     // Shift right to move to next bhr[i]
-    // printf("mag %ld\n",magnitude);
     // printf("bhr %d\n", bhr_i);
-    // printf("dig %d\n", (int)(bhr_i / magnitude));
-    bhr_i = bhr_i % magnitude;
-    magnitude >> 1;
+    // printf("dig %d\n", (int)(bhr_i & 1));
+
+    bhr_i = bhr_i >> 1;
     
   }
 
@@ -310,7 +308,7 @@ void train_predictor_tournament(uint32_t pc, uint32_t outcome) {
   // update chooser/counter, based on whether global or local was right/wrong
   // as per slide in lec 8
   uint32_t choose_idx = bhr;
-  int counter_change = local_choice - global_correct;
+  int counter_change = global_correct - local_choice;
   if ((0 <= chooser[choose_idx] + counter_change) && 
       (chooser[choose_idx] + counter_change <= 3)){
     chooser[choose_idx] += counter_change;
@@ -325,36 +323,32 @@ void train_predictor_custom(uint32_t pc, uint8_t outcome) {
   // Get location of start of this row
   char * current_f = perceptron_f + (ind_pc * (ghistoryBits + 1));
 
-  // update bias term
   uint8_t prediction = make_prediction_custom(pc);
-  
-  // update bias based 
-  if (!prediction && outcome){
-    // guessed too low, increment bias
-    current_f[ghistoryBits]++;
-  } else if (prediction && !outcome){
-    // guessed to high, decrement bias
-    current_f[ghistoryBits]--;
-  }
 
-  // update individual weights
-  int i = 0;
-  uint64_t magnitude = pow(2, ghistoryBits);
-  int bhr_i = bhr;
-
-  for(; i < ghistoryBits; i++) {
-    // BHR_i == 1 ? F_i++ : F_i––;
-    if ((int)(bhr_i / magnitude) == 1){
-      current_f[i]++;
+  // only update if guessed incorrectly
+  if (prediction != outcome){
+    // update bias based 
+    if (outcome == TAKEN){
+      // guessed too low, increment bias
+      current_f[ghistoryBits]++;
     } else {
-      current_f[i]--;
+      // guessed to high, decrement bias
+      current_f[ghistoryBits]--;
     }
-    //printf("mag %ld\n", magnitude);
-    bhr_i = bhr_i % magnitude;
-    magnitude >> 1;
-    
-    // Shift right to move to next bhr[i]
-    //bhr_i = bhr_i >> 1;
+
+    // update individual weights
+    int bhr_i = bhr;
+
+    for(int i = 0; i < ghistoryBits; i++) {
+      // BHR_i == 1 ? F_i++ : F_i––;
+      if ((bhr_i & 1) == 1){
+        current_f[i]++;
+      } else {
+        current_f[i]--;
+      }
+      // Shift right to move to next bhr[i]
+      bhr_i = bhr_i >> 1;
+    }
   }
 */
   int t = outcome ? 1 : -1;
