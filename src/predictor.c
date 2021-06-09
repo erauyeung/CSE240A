@@ -33,8 +33,10 @@ int pcIndexBits;  // Number of bits used for PC index
 int bpType;       // Branch Prediction Type
 int verbose;
 
-#define PERCEPTRON_PC_WIDTH 9 //How many bits to use from PC
-#define PERCEPTRON_THRESHOLD 42 //(1.93*ghistoryBits) + 14 // Threshold to predict taken
+int perceptron_pc_width = 10;//9;
+
+#define PERCEPTRON_PC_BITS 10 //9 //How many bits to use from PC
+#define PERCEPTRON_THRESHOLD 0 //(1.93*15) + 14 // Threshold to predict taken
 
 //------------------------------------//
 //      Predictor Data Structures     //
@@ -59,7 +61,7 @@ uint32_t* BHT_local;     // 2^n array to keep track of local t/nt
 uint32_t* chooser;       // keeps track of chooser for each addr
 
 // Stuff for perceptron
-char * perceptron_f;    // Each F_i is 8-bit char
+char* perceptron_f;    // Each F_i is 8-bit char
 
 //------------------------------------//
 //        Predictor Functions         //
@@ -170,19 +172,25 @@ uint8_t make_prediction_custom(uint32_t pc) {
   // Get truncated pc
   int ind_pc = (pc ^ bhr) % (int)pow(2, PERCEPTRON_PC_WIDTH);
   // Get location of start of this row
-  char * current_f = perceptron_f + (ind_pc * (ghistoryBits + 1));
+  char* current_f = perceptron_f + (ind_pc * (ghistoryBits + 1));
   // Manipulate bhr to get bhr[i]
   int bhr_i = bhr;
   // Summation
   int sigma = current_f[ghistoryBits]; // start with current bias
-
+  
   int i = 0;
-  //bhr[ghistoryBits:0]
+  uint64_t magnitude = pow(2, ghistoryBits);
+  //printf("begin\n");
   for(; i < ghistoryBits; i++) {
     // F_i * bhr[i], where bhr[i] can only be 0 or 1
-    sigma += (int)(current_f[i]  * (bhr_i & 1));
+    sigma += (int)(current_f[i]  * (int)(bhr_i / magnitude));
     // Shift right to move to next bhr[i]
-    bhr_i = bhr_i >> 1;
+    // printf("mag %ld\n",magnitude);
+    // printf("bhr %d\n", bhr_i);
+    // printf("dig %d\n", (int)(bhr_i / magnitude));
+    bhr_i = bhr_i % magnitude;
+    magnitude >> 1;
+    
   }
 
   if( sigma > PERCEPTRON_THRESHOLD ) {
@@ -313,43 +321,40 @@ void train_predictor_tournament(uint32_t pc, uint32_t outcome) {
 
 void train_predictor_custom(uint32_t pc, uint8_t outcome) {
   // Get truncated pc
-  int ind_pc = (pc ^ bhr) % (int)pow(2, PERCEPTRON_PC_WIDTH);
-  // Get location of start of this row of F_i's
-  char * current_f = perceptron_f + (ind_pc * (ghistoryBits+1));
-  // Manipulate bhr to get bhr[i]
-  int bhr_i = bhr;
+  int ind_pc = (pc ^ bhr) % (int)pow(2, perceptron_pc_width);
+  // Get location of start of this row
+  char * current_f = perceptron_f + (ind_pc * (ghistoryBits + 1));
 
-  int i = 0;
-
-  // Summation
-  int sigma = current_f[ghistoryBits]; // start with current bias
-  for(; i < ghistoryBits; i++) {
-    // F_i * bhr[i], where bhr[i] can only be 0 or 1
-    sigma += (int)(current_f[i]  * (bhr_i & 1));
-    // Shift right to move to next bhr[i]
-    bhr_i = bhr_i >> 1;
+  // update bias term
+  uint8_t prediction = make_prediction_custom(pc);
+  
+  // update bias based 
+  if (!prediction && outcome){
+    // guessed too low, increment bias
+    current_f[ghistoryBits]++;
+  } else if (prediction && !outcome){
+    // guessed to high, decrement bias
+    current_f[ghistoryBits]--;
   }
 
-  i = 0;
-/*
-  //bhr[ghistoryBits:0]
+  // update individual weights
+  int i = 0;
+  uint64_t magnitude = pow(2, ghistoryBits);
+  int bhr_i = bhr;
+
   for(; i < ghistoryBits; i++) {
     // BHR_i == 1 ? F_i++ : F_i––;
-    if ((bhr_i & 1) == 1){
+    if ((int)(bhr_i / magnitude) == 1){
       current_f[i]++;
     } else {
       current_f[i]--;
     }
-  
+    //printf("mag %ld\n", magnitude);
+    bhr_i = bhr_i % magnitude;
+    magnitude >> 1;
+    
     // Shift right to move to next bhr[i]
-    bhr_i = bhr_i >> 1;
-  }
-
-  // update bias based 
-  if (outcome){
-    current_f[ghistoryBits]++;
-  } else {
-    current_f[ghistoryBits]--;
+    //bhr_i = bhr_i >> 1;
   }
 */
   int t = outcome ? 1 : -1;
