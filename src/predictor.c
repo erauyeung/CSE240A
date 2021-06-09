@@ -33,10 +33,8 @@ int pcIndexBits;  // Number of bits used for PC index
 int bpType;       // Branch Prediction Type
 int verbose;
 
-int perceptron_pc_width = 10;//\\9;
-
-#define PERCEPTRON_PC_BITS 10;//9; //How many bits to use from PC
-#define PERCEPTRON_THRESHOLD 42 //-43 //(1.93*15) + 14 // Threshold to predict taken
+#define PERCEPTRON_PC_WIDTH 10 //How many bits to use from PC
+#define PERCEPTRON_THRESHOLD 42 //(1.93*15) + 14 // Threshold to predict taken
 
 //------------------------------------//
 //      Predictor Data Structures     //
@@ -319,7 +317,7 @@ void train_predictor_tournament(uint32_t pc, uint32_t outcome) {
 
 void train_predictor_custom(uint32_t pc, uint8_t outcome) {
   // Get truncated pc
-  int ind_pc = (pc ^ bhr) % (int)pow(2, perceptron_pc_width);
+  int ind_pc = (pc ^ bhr) % (int)pow(2, PERCEPTRON_PC_WIDTH);
   // Get location of start of this row
   char * current_f = perceptron_f + (ind_pc * (ghistoryBits + 1));
 
@@ -350,7 +348,8 @@ void train_predictor_custom(uint32_t pc, uint8_t outcome) {
       bhr_i = bhr_i >> 1;
     }
   }
-*/
+
+/*
   int t = outcome ? 1 : -1;
   if( (sigma < 0 && t == 1) || (sigma >= 0 && t == -1) || (sigma <= PERCEPTRON_THRESHOLD) ) {
     for(; i < ghistoryBits; i++) {
@@ -361,7 +360,7 @@ void train_predictor_custom(uint32_t pc, uint8_t outcome) {
     //modify bias
     current_f[ghistoryBits] += t;
   }
-
+*/
 }
 
 // Train the predictor the last executed branch at PC 'pc' and with
