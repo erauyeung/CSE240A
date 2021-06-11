@@ -33,7 +33,7 @@ int pcIndexBits;  // Number of bits used for PC index
 int bpType;       // Branch Prediction Type
 int verbose;
 
-#define PERCEPTRON_PC_WIDTH 10 //How many bits to use from PC
+#define PERCEPTRON_PC_WIDTH 9 //How many bits to use from PC
 #define PERCEPTRON_THRESHOLD 42 //(1.93*15) + 14 // Threshold to predict taken
 
 //------------------------------------//
@@ -179,17 +179,14 @@ uint8_t make_prediction_custom(uint32_t pc) {
   // printf("begin\n  ");
   for(int i = 0; i < ghistoryBits; i++) {
     // F_i * bhr[i], where bhr[i] can only be 0 or 1
+    sigma += (current_f[i] * (bhr_i & 1));
 
-    sigma += current_f[i] * (bhr_i & 1);
     // Shift right to move to next bhr[i]
-    // printf("bhr %d\n", bhr_i);
-    // printf("dig %d\n", (int)(bhr_i & 1));
-
     bhr_i = bhr_i >> 1;
     
   }
 
-  if( sigma > PERCEPTRON_THRESHOLD ) {
+  if( sigma >= PERCEPTRON_THRESHOLD ) {
     return TAKEN;
   } else {
     return NOTTAKEN;
@@ -320,6 +317,12 @@ void train_predictor_custom(uint32_t pc, uint8_t outcome) {
   int ind_pc = (pc ^ bhr) % (int)pow(2, PERCEPTRON_PC_WIDTH);
   // Get location of start of this row
   char * current_f = perceptron_f + (ind_pc * (ghistoryBits + 1));
+  int abs_outcome = 0;
+  if (outcome){
+    abs_outcome = 1;
+  } else {
+    abs_outcome = -1;
+  }
 
   uint8_t prediction = make_prediction_custom(pc);
 
@@ -339,11 +342,8 @@ void train_predictor_custom(uint32_t pc, uint8_t outcome) {
 
     for(int i = 0; i < ghistoryBits; i++) {
       // BHR_i == 1 ? F_i++ : F_i––;
-      if ((bhr_i & 1) == 1){
-        current_f[i]++;
-      } else {
-        current_f[i]--;
-      }
+     current_f[i] += ((bhr_i & 1) * abs_outcome);
+
       // Shift right to move to next bhr[i]
       bhr_i = bhr_i >> 1;
     }
